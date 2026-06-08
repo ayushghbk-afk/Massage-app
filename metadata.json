@@ -1,0 +1,6 @@
+{
+  "name": "Secure Messenger",
+  "description": "A highly secure chat application featuring E2E AES/RSA encryption, multi-select groups, secure calling simulation, and a dedicated Developer security dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
