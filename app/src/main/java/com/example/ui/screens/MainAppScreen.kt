@@ -9,6 +9,9 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.ui.zIndex
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -91,6 +94,32 @@ fun MainAppScreen(
                 )
             )
     ) {
+        // System Wide Cryptographic Notification Overlay
+        val activeNotification by viewModel.activeNotification.collectAsStateWithLifecycle()
+        AnimatedVisibility(
+            visible = activeNotification != null,
+            enter = fadeIn(animationSpec = tween(350)) + expandVertically(),
+            exit = fadeOut(animationSpec = tween(300)) + shrinkVertically(),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .statusBarsPadding()
+                .padding(top = 12.dp, start = 12.dp, end = 12.dp)
+                .zIndex(99f)
+        ) {
+            activeNotification?.let { notification ->
+                SecureNotificationBanner(
+                    notification = notification,
+                    onDismiss = { viewModel.dismissNotification() },
+                    onClick = {
+                        viewModel.dismissNotification()
+                        if (notification.type == "MESSAGE" && notification.chatId != null) {
+                            viewModel.setActiveChat(notification.chatId)
+                        }
+                    }
+                )
+            }
+        }
+
         if (!isLoggedIn) {
             if (!isRegistered) {
                 RegistrationScreen(viewModel = viewModel)
@@ -3042,6 +3071,92 @@ fun CloudSyncTab(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+// In-App floating cryptographic alert banner
+@Composable
+fun SecureNotificationBanner(
+    notification: ChatViewModel.InAppNotification,
+    onDismiss: () -> Unit,
+    onClick: () -> Unit
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = SecureSurface),
+        border = BorderStroke(
+            1.5.dp,
+            when (notification.type) {
+                "MESSAGE" -> SecureMutedText
+                "SYNC" -> SecureAccentGreen
+                "SECURITY" -> Color.Red
+                else -> SecureAccentGreen
+            }
+        ),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        elevation = CardDefaults.cardElevation(defaultElevation = 10.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(12.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .background(SecureDarkBackground),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = when (notification.type) {
+                        "MESSAGE" -> Icons.Default.Chat
+                        "SYNC" -> Icons.Default.Cloud
+                        "SECURITY" -> Icons.Default.Warning
+                        else -> Icons.Default.Shield
+                    },
+                    contentDescription = null,
+                    tint = if (notification.type == "MESSAGE") SecureElectricBlue else if (notification.type == "SYNC") SecureAccentGreen else Color.Red,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = notification.title,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                    letterSpacing = 0.5.sp
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = notification.body,
+                    color = SecureMutedText,
+                    fontSize = 12.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier.size(28.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Dismiss Alert",
+                    tint = SecureMutedText,
+                    modifier = Modifier.size(16.dp)
+                )
             }
         }
     }

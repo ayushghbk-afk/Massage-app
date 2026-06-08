@@ -190,7 +190,9 @@ class ChatRepository(private val context: Context) {
 
     init {
         scope.launch {
-            prepopulateDatabaseIfNeeded()
+            if (isRegistered()) {
+                prepopulateDatabaseIfNeeded()
+            }
         }
     }
 

@@ -62,6 +62,35 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _isSyncInProgress = MutableStateFlow(false)
     val isSyncInProgress = _isSyncInProgress.asStateFlow()
 
+    // Cryptographic In-App Secure Notifications
+    data class InAppNotification(
+        val id: String = UUID.randomUUID().toString(),
+        val title: String,
+        val body: String,
+        val type: String, // "MESSAGE", "SYNC", "SECURITY", "CALL"
+        val chatId: String? = null
+    )
+
+    private val _activeNotification = MutableStateFlow<InAppNotification?>(null)
+    val activeNotification = _activeNotification.asStateFlow()
+
+    private var lastObservedMessageTimestamp = System.currentTimeMillis()
+
+    fun triggerNotification(title: String, body: String, type: String, chatId: String? = null) {
+        viewModelScope.launch {
+            val notification = InAppNotification(title = title, body = body, type = type, chatId = chatId)
+            _activeNotification.value = notification
+            delay(4000)
+            if (_activeNotification.value?.id == notification.id) {
+                _activeNotification.value = null
+            }
+        }
+    }
+
+    fun dismissNotification() {
+        _activeNotification.value = null
+    }
+
     init {
         _isRegistered.value = repository.isRegistered()
         _currentUserName.value = repository.currentUserName
@@ -69,6 +98,27 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _currentUserAvatar.value = repository.currentUserAvatar
         _isCloudBackupAvailable.value = repository.isCloudBackupAvailable
         _lastCloudBackupTime.value = repository.lastCloudBackupTime
+
+        // Start real-time observer for incoming peer messages to show floating cyber alert
+        viewModelScope.launch {
+            allMessagesRaw.collect { list ->
+                if (list.isEmpty()) return@collect
+                val latest = list.maxByOrNull { it.timestamp } ?: return@collect
+                if (latest.timestamp > lastObservedMessageTimestamp && latest.senderId != "my_secure_id") {
+                    val activeId = _activeChatId.value
+                    if (latest.chatId != activeId) {
+                        val decrypted = decryptMessage(latest)
+                        triggerNotification(
+                            title = "DECRYPTED INCOMING RAW PACKET: ${latest.senderName.uppercase()}",
+                            body = decrypted,
+                            type = "MESSAGE",
+                            chatId = latest.chatId
+                        )
+                    }
+                }
+                lastObservedMessageTimestamp = maxOf(lastObservedMessageTimestamp, latest.timestamp)
+            }
+        }
     }
 
     // Auth & Registration Actions
@@ -116,6 +166,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             // Reset state to empty local details but preserve registration
             _currentUserName.value = "You"
             _currentUserStatus.value = "Certified node active."
+            triggerNotification(
+                title = "LOCAL DATABASE STORAGE SHREDDED",
+                body = "All local SQLite conversation history logs and device caching layers were permanently scrubbed.",
+                type = "SECURITY"
+            )
         }
     }
 
@@ -157,6 +212,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             _isCloudBackupAvailable.value = repository.isCloudBackupAvailable
             _lastCloudBackupTime.value = repository.lastCloudBackupTime
             _isSyncInProgress.value = false
+            triggerNotification(
+                title = "CLOUD BACKUP VERIFIED",
+                body = "Encrypted database parcel uploaded successfully. SHA-256 Checksum: ${checksum.take(18)}...",
+                type = "SYNC"
+            )
             onSuccess(checksum)
         }
     }
@@ -185,6 +245,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             _currentUserStatus.value = repository.currentUserStatus
             _currentUserAvatar.value = repository.currentUserAvatar
             _isSyncInProgress.value = false
+            triggerNotification(
+                title = "CLOUD RESTORATION COMPLETE",
+                body = "Locally cached RSA keypair, private keyring, and messages fully restored.",
+                type = "SYNC"
+            )
             onSuccess()
         }
     }
